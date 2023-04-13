@@ -1,0 +1,126 @@
+﻿@page "/chat"
+
+@using System.Collections.Generic
+@using Microsoft.Extensions.Options;
+@using HopLind.OpenAIService
+@using HopLind.OpenAIService.Models
+
+@inject IJSRuntime JSRuntime
+@inject HopLind.OpenAIService.OpenAIService OpenAIService
+@inject IOptions<HopLind.OpenAIService.Config> OpenAIConfig
+
+<PageTitle>Chat</PageTitle>
+
+<h1>Chat</h1>
+
+<ul style="width: 100%; max-height: 70vh; overflow-y: scroll">
+    @foreach (var ChatEntry in ChatEntries)
+    {
+        <li style="width: 100%;">
+            <div class="chat-role chat-@(ChatEntry.Role)">@(ChatEntry.Role)</div>
+            <div class="chat-content chat-@(ChatEntry.Role)">
+                <div id="@(Guid.NewGuid().ToString("N"))" class="markdown-raw">@(ChatEntry.Content)</div>
+                <div class="markdown-container"></div>
+            </div>
+        </li>
+    }
+</ul>
+
+<data id="markdown-is-rendering" value="@ChatIsRendering" />
+
+<div style="width: 100%">
+    <div style="color: red; display: @(ErrorShow ? "block": "none")">@ErrorMessage</div>
+    <EditForm Model="ChatInput">
+        <InputTextArea style="width: 80%" @bind-Value="ChatInput" @oninput="SetButton" />
+        <div style="width: 20%">
+            <button class="btn btn-primary" style="margin-bottom: 2rem" title="Send" disabled="@ChatDisabled" @onclick="async () => await AddChatEntry()">&#9992;</button>
+            <button class="btn btn-outline-secondary" style="margin-bottom: 2rem" title="Go to Top" onclick="document.querySelector('#markdown-is-rendering').parentNode.querySelector('ul').scrollTop = 0">↑</button>
+            <button class="btn btn-secondary" style="margin-bottom: 2rem" disabled="@ChatDisabled" @onclick="() => ClearChatEntries()">Clear</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private bool ErrorShow = false;
+    private string ErrorMessage = string.Empty;
+
+    private bool ChatDisabled = true;
+    private bool ChatIsRequesting = false;
+    private int ChatIsRendering = 0;
+
+    private string ChatInput = string.Empty;
+
+    private List<(string Role, string Content)> ChatEntries = new();
+
+    private const int ChatContextLength = 10;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ChatReference = DotNetObjectReference.Create(this);
+        _ = JSRuntime.InvokeVoidAsync("GLOBAL.SetDotnetReference", ChatReference);
+
+        await base.OnInitializedAsync();
+    }
+
+    private void SetButton(ChangeEventArgs e)
+    {
+        ChatDisabled = ChatIsRequesting || ChatIsRendering == 1 || ((string)e.Value).Length == 0;
+        StateHasChanged();
+    }
+
+    private async Task AddChatEntry()
+    {
+        if (string.IsNullOrWhiteSpace(ChatInput)) return;
+
+        ErrorShow = false;
+        ChatIsRequesting = true;
+
+        string Input = new string(ChatInput);
+        ChatInput = string.Empty;
+
+        StateHasChanged();
+
+        var ChatEntry = (Role: ChatGPTConstant.ChatGPTRoleUser, Content: Input);
+        ChatEntries.Add(ChatEntry);
+        try
+        {
+            var Completion = await OpenAIService.ChatCompletAsync(new ChatGPTRequest
+                {
+                    Model = OpenAIConfig.Value.APIType is APIType.Azure ? "gpt-35-turbo" : "gpt-3.5-turbo",
+                    Messages = ChatEntries.Skip(ChatEntries.Count <= ChatContextLength ? 0 : ChatEntries.Count - ChatContextLength)
+                                    .Select(c => new ChatGPTMessage(c.Role, c.Content)).ToArray()
+                });
+
+            ChatEntry = (Completion.Choices[0].Message.Role, Completion.Choices[0].Message.Content);
+            ChatEntries.Add(ChatEntry);
+        }
+        catch (Exception ex)
+        {
+            ChatEntries.RemoveAt(ChatEntries.Count - 1);
+
+            ChatInput = Input;
+
+            ErrorShow = true;
+            ErrorMessage = "Some error occurs while completing the reply. Please re-try and contact administrator if the error remains";
+        }
+
+        ChatIsRequesting = false;
+        ChatIsRendering = 1;
+        StateHasChanged();
+    }
+
+    private void ClearChatEntries()
+    {
+        ErrorShow = false;
+        ErrorMessage = string.Empty;
+
+        ChatEntries.Clear();
+    }
+
+    [JSInvokable(nameof(UpdateChatRenderStatus))]
+    public void UpdateChatRenderStatus(int ChatRenderStatus)
+    {
+        ChatIsRendering = ChatRenderStatus;
+        StateHasChanged();
+    }
+}

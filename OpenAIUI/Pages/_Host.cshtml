@@ -1,0 +1,72 @@
+﻿@page "/"
+@namespace HopLind.OpenAIUI.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+}
+
+<component type="typeof(App)" render-mode="ServerPrerendered" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js" integrity="sha512-zAs8dHhwlTbfcVGRX1x0EZAH/L99NjAFzX6muwOcOJc7dbGFNaW4O7b9QOyCMRYBNjO+E0Kx6yLDsiPQhhWm7g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js" integrity="sha512-bgHRAiTjGrzHzLyKOnpFvaEpGzJet3z4tZnXGjpsCcqOnAH6VGUx9frc5bcIhKTVLEiCO6vEhNAgx5jtLUYrfA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/base16/material.min.css" integrity="sha512-FKzMeNkm8zqCguwqHyTYskFTD4L7WW5znImGuc+fYTIJGRpUWszuJLGh9Bq8smPaPzN0LtqagnRgihN53PL04A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<script language="javascript">
+    var GLOBAL = {};
+    GLOBAL.DotNetReference = null;
+    GLOBAL.SetDotnetReference = function (pDotNetReference) {
+        GLOBAL.DotNetReference = pDotNetReference;
+    };
+
+    document.addEventListener('DOMContentLoaded', (event) => {
+        setTimeout(renderMarkdownTimer, 3000)
+    })
+
+    let currentCharIndex = 0;
+
+    function afterRenderCompletion() {
+        if (GLOBAL.DotNetReference != null)
+            GLOBAL.DotNetReference.invokeMethodAsync('UpdateChatRenderStatus', 0)
+
+        setTimeout(renderMarkdownTimer, 3000)
+    }
+
+    function renderNextChar() {
+        const markdownRaw = document.querySelector(".markdown-raw")
+        if (markdownRaw == null) {
+            afterRenderCompletion()
+
+            return
+        }
+
+        const markdownContainer = document.querySelector(".markdown-container")
+
+        const currentText = markdownRaw.textContent.slice(0, currentCharIndex)
+        markdownContainer.innerHTML = marked.parse(currentText + "■")
+        currentCharIndex++;
+
+        if (currentCharIndex <= markdownRaw.textContent.length) {
+            const delayMax = 50
+            const delay = Math.random() * delayMax
+
+            markdownContainer.querySelectorAll("code").forEach((el) => hljs.highlightElement(el))
+            setTimeout(renderNextChar, delay)
+        }
+        else {
+            const markdownParent = markdownRaw.parentElement
+            markdownParent.innerHTML = markdownContainer.innerHTML.replace(/■/, "")
+
+            hljs.highlightAll()
+
+            afterRenderCompletion()
+
+            const chatList = document.querySelector("#markdown-is-rendering").parentNode.querySelector("ul")
+            chatList.scrollTop = chatList.scrollHeight
+        }
+    }
+
+    function renderMarkdownTimer() {
+        currentCharIndex = 0
+        renderNextChar()
+    }
+</script>
+

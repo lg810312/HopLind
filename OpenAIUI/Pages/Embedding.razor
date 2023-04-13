@@ -1,0 +1,32 @@
+﻿@page "/embedding"
+
+@using HopLind.OpenAIService
+@using HopLind.OpenAIService.Models
+
+@inject OpenAIService OpenAIService
+
+<PageTitle>Embedding</PageTitle>
+
+<h1>Embedding</h1>
+
+<EditForm Model="textInput">
+    <InputTextArea style="width: 100%; margin: 1rem auto" rows="5" @bind-Value="@textInput" />
+    <button class="btn btn-primary" @onclick="async () => await GetEmbeddings()">Generate Embeddings</button>
+</EditForm>
+<EditForm Model="embeddingsResult">
+    <InputTextArea style="width: 100%; margin: 1rem auto" rows="10" readonly @bind-Value="@embeddingsResult" />
+</EditForm>
+
+@code {
+    private string textInput = string.Empty;
+    private string embeddingsResult = string.Empty;
+
+    private async Task GetEmbeddings()
+    {
+        if (string.IsNullOrWhiteSpace(textInput)) return;
+
+        var Embeddings = await OpenAIService.EmbeddingAsync(new EmbeddingReuqest("text-embedding-ada-002", textInput));
+        embeddingsResult = string.Join(Environment.NewLine, Embeddings.Data[0].Embedding);
+    }
+}
+
