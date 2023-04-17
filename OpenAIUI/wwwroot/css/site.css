@@ -74,11 +74,13 @@ a, .btn-link {
 }
 
 .chat-user {
-    background-color: #eee;
+    background-color: #f3f3f3;
+    border: 1px solid #ddd;
 }
 
 .chat-assistant {
-    background-color: #ccc;
+    background-color: #e0e0e0;
+    border: 1px solid #ccc;
 }
 
 .markdown-raw {

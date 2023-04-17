@@ -17,7 +17,11 @@
         GLOBAL.DotNetReference = pDotNetReference;
     };
 
-    document.addEventListener('DOMContentLoaded', (event) => {
+    var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition
+    var SpeechSynthesis = SpeechSynthesis || window.speechSynthesis
+    document.addEventListener("DOMContentLoaded", (event) => {
+        setTimeout(checkAccessibility, 1000);
+
         setTimeout(renderMarkdownTimer, 3000)
     })
 
@@ -25,7 +29,7 @@
 
     function afterRenderCompletion() {
         if (GLOBAL.DotNetReference != null)
-            GLOBAL.DotNetReference.invokeMethodAsync('UpdateChatRenderStatus', 0)
+            GLOBAL.DotNetReference.invokeMethodAsync("UpdateChatRenderStatus", 0)
 
         setTimeout(renderMarkdownTimer, 3000)
     }
@@ -67,6 +71,31 @@
     function renderMarkdownTimer() {
         currentCharIndex = 0
         renderNextChar()
+    }
+
+    function checkAccessibility() {
+        if (GLOBAL.DotNetReference != null)
+            GLOBAL.DotNetReference.invokeMethodAsync("CheckAccessibility", SpeechRecognition != null, SpeechSynthesis != null)
+    }
+
+    function startRecognition(voiceInputId) {
+        const recognition = new SpeechRecognition()
+        const voiceInput = document.querySelector("#" + voiceInputId)
+        recognition.lang = navigator.language || navigator.userLanguage
+
+        recognition.onresult = function (event) {
+            const result = event.results[event.results.length - 1][0].transcript
+            voiceInput.value = result
+            if (GLOBAL.DotNetReference != null)
+                GLOBAL.DotNetReference.invokeMethodAsync("RefreshStatus", result)
+        }
+        recognition.onnomatch = function (event) {
+            console.log("Cannot recognize any from voice input")
+        }
+        recognition.onerror = function (event) {
+            console.log("Error occurred in recognition: " + event.error);
+        }
+        recognition.start();
     }
 </script>
 
