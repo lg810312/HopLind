@@ -13,11 +13,11 @@
 
 <h1>Chat</h1>
 
-<ul style="width: 100%; max-height: 70vh; overflow-y: scroll">
+<ul style="width: 100%; max-height: 70vh; padding-left: 0; overflow-y: scroll">
     @foreach (var ChatEntry in ChatEntries)
     {
-        <li style="width: 100%;">
-            <div class="chat-role chat-@(ChatEntry.Role)"><img src="@($"https://api.multiavatar.com/{(ChatEntry.Role == "user" ? UserUUID: "ChatGPT")}.png")" width="32" /></div>
+        <li style="width: 100%; margin-bottom: 0.5rem; display: flex">
+            <div class="chat-role chat-@(ChatEntry.Role)"><img src="@($"https://api.multiavatar.com/{(ChatEntry.Role == "user" ? string.Empty : "ChatGPT")}{UserUUID}.png")" width="48" /></div>
             <div class="chat-content chat-@(ChatEntry.Role)">
                 <div id="@(Guid.NewGuid().ToString("N"))" class="markdown-raw">@(ChatEntry.Content)</div>
                 <div class="markdown-container"></div>
@@ -36,7 +36,7 @@
             <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Send" disabled="@ChatDisabled" @onclick="async () => await AddChatEntry()">&#9992;</button>
             <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Voice Input" hidden="@(!SupportSpeechRecognition)" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" onclick="startRecognition('ChatInput')">&#127908;</button>
             <button class="btn btn-outline-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Go to Top" onclick="document.querySelector('#markdown-is-rendering').parentNode.querySelector('ul').scrollTop = 0">&#128285;</button>
-            <button class="btn btn-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" disabled="@ChatDisabled" @onclick="() => ClearChatEntries()">&#128465;</button>
+            <button class="btn btn-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" @onclick="() => ClearChatEntries()">&#128465;</button>
         </div>
     </EditForm>
 </div>
@@ -110,7 +110,7 @@
         }
 
         ChatIsRequesting = false;
-        ChatIsRendering = 1;
+        if (!ErrorShow) ChatIsRendering = 1;
         ChatDisabled = ChatIsRequesting || ChatIsRendering == 1 || ChatInput.Length == 0;
         StateHasChanged();
     }

@@ -64,13 +64,13 @@ a, .btn-link {
     }
 
 .chat-role {
-    flex: 1 1 10%;
-    padding-right: 1rem;
+    flex: 1 1 5%;
+    padding: 0.5rem;
 }
 
 .chat-content {
-    flex: 1 1 90%;
-    padding-left: 1rem;
+    flex: 1 1 95%;
+    padding: 0.5rem;
 }
 
 .chat-user {
