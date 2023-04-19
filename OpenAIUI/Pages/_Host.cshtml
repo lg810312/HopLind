@@ -17,10 +17,10 @@
         GLOBAL.DotNetReference = pDotNetReference;
     };
 
-    var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition
-    var SpeechSynthesis = SpeechSynthesis || window.speechSynthesis
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    var SpeechSynthesis = window.SpeechSynthesis || window.speechSynthesis
     document.addEventListener("DOMContentLoaded", (event) => {
-        setTimeout(checkAccessibility, 1000);
+        setTimeout(checkAccessibility, 2000);
 
         setTimeout(renderMarkdownTimer, 3000)
     })
@@ -80,12 +80,13 @@
 
     function startRecognition(voiceInputId) {
         const recognition = new SpeechRecognition()
-        const voiceInput = document.querySelector("#" + voiceInputId)
         recognition.lang = navigator.language || navigator.userLanguage
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
 
         recognition.onresult = function (event) {
             const result = event.results[event.results.length - 1][0].transcript
-            voiceInput.value = result
+            document.querySelector("#" + voiceInputId).value = result
             if (GLOBAL.DotNetReference != null)
                 GLOBAL.DotNetReference.invokeMethodAsync("RefreshStatus", result)
         }
