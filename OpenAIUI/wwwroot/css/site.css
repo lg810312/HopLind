@@ -64,21 +64,23 @@ a, .btn-link {
     }
 
 .chat-role {
-    flex: 1 1 10%;
-    padding-right: 1rem;
+    flex: 1 1 5%;
+    padding: 0.5rem;
 }
 
 .chat-content {
-    flex: 1 1 90%;
-    padding-left: 1rem;
+    flex: 1 1 95%;
+    padding: 0.5rem;
 }
 
 .chat-user {
-    background-color: #eee;
+    background-color: #f3f3f3;
+    border: 1px solid #ddd;
 }
 
 .chat-assistant {
-    background-color: #ccc;
+    background-color: #e0e0e0;
+    border: 1px solid #ccc;
 }
 
 .markdown-raw {

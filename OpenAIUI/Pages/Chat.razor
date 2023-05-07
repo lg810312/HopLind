@@ -13,11 +13,23 @@
 
 <h1>Chat</h1>
 
-<ul style="width: 100%; max-height: 70vh; overflow-y: scroll">
+<div>
+    Advanced Settings
+    <div style="cursor: pointer; display: inline-block" onclick="toggleAdvancedSettings(this)">&#11206;</div>
+    <div id="advancedSettings" data-display="0" style="display: none">
+        <div id="speechSynthesis">
+            <select></select>
+        </div>
+    </div>
+</div>
+
+<ul style="width: 100%; max-height: 70vh; padding-left: 0; overflow-y: scroll">
     @foreach (var ChatEntry in ChatEntries)
     {
-        <li style="width: 100%;">
-            <div class="chat-role chat-@(ChatEntry.Role)">@(ChatEntry.Role)</div>
+        <li style="width: 100%; margin-bottom: 0.5rem; display: flex">
+            <div class="chat-role chat-@(ChatEntry.Role)">
+                <img src="@($"https://api.multiavatar.com/{(ChatEntry.Role == "user" ? string.Empty : "ChatGPT")}{UserUUID}.png")" width="48" />
+            </div>
             <div class="chat-content chat-@(ChatEntry.Role)">
                 <div id="@(Guid.NewGuid().ToString("N"))" class="markdown-raw">@(ChatEntry.Content)</div>
                 <div class="markdown-container"></div>
@@ -30,22 +42,28 @@
 
 <div style="width: 100%">
     <div style="color: red; display: @(ErrorShow ? "block": "none")">@ErrorMessage</div>
-    <EditForm Model="ChatInput">
-        <InputTextArea style="width: 80%" @bind-Value="ChatInput" @oninput="SetButton" />
-        <div style="width: 20%">
-            <button class="btn btn-primary" style="margin-bottom: 2rem" title="Send" disabled="@ChatDisabled" @onclick="async () => await AddChatEntry()">&#9992;</button>
-            <button class="btn btn-outline-secondary" style="margin-bottom: 2rem" title="Go to Top" onclick="document.querySelector('#markdown-is-rendering').parentNode.querySelector('ul').scrollTop = 0">↑</button>
-            <button class="btn btn-secondary" style="margin-bottom: 2rem" disabled="@ChatDisabled" @onclick="() => ClearChatEntries()">Clear</button>
+    <EditForm Model="ChatInput" style="display: flex">
+        <InputTextArea style="flex: 1 1 80%;" id="ChatInput" @bind-Value="ChatInput" @oninput="SetButton" />
+        <div style="width: 20%; margin-left: 0.5rem; flex: 1 1 20%">
+            <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Send" disabled="@ChatDisabled" @onclick="async () => await AddChatEntry()">&#9992;</button>
+            <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Voice Input" hidden="@(!SupportSpeechRecognition)" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" onclick="startRecognition('ChatInput')">&#127908;</button>
+            <button class="btn btn-outline-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Go to Top" onclick="document.querySelector('#markdown-is-rendering').parentNode.querySelector('ul').scrollTop = 0">&#128285;</button>
+            <button class="btn btn-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" @onclick="() => ClearChatEntries()">&#128465;</button>
         </div>
     </EditForm>
 </div>
 
 @code {
-    private bool ErrorShow = false;
+    private string UserUUID = Guid.NewGuid().ToString("N");
+
+    private bool SupportSpeechRecognition { get; set; }
+    private bool SupportSpeechSynthesis { get; set; }
+
+    private bool ErrorShow;
     private string ErrorMessage = string.Empty;
 
     private bool ChatDisabled = true;
-    private bool ChatIsRequesting = false;
+    private bool ChatIsRequesting;
     private int ChatIsRendering = 0;
 
     private string ChatInput = string.Empty;
@@ -54,12 +72,14 @@
 
     private const int ChatContextLength = 10;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var ChatReference = DotNetObjectReference.Create(this);
-        _ = JSRuntime.InvokeVoidAsync("GLOBAL.SetDotnetReference", ChatReference);
-
-        await base.OnInitializedAsync();
+        if (firstRender)
+        {
+            var ChatReference = DotNetObjectReference.Create(this);
+            _ = JSRuntime.InvokeVoidAsync("GLOBAL.SetDotnetReference", ChatReference);
+        }
+        await base.OnAfterRenderAsync(firstRender);
     }
 
     private void SetButton(ChangeEventArgs e)
@@ -88,7 +108,7 @@
                 {
                     Model = OpenAIConfig.Value.APIType is APIType.Azure ? "gpt-35-turbo" : "gpt-3.5-turbo",
                     Messages = ChatEntries.Skip(ChatEntries.Count <= ChatContextLength ? 0 : ChatEntries.Count - ChatContextLength)
-                                    .Select(c => new ChatGPTMessage(c.Role, c.Content)).ToArray()
+                    .Select(c => new ChatGPTMessage(c.Role, c.Content)).ToArray()
                 });
 
             ChatEntry = (Completion.Choices[0].Message.Role, Completion.Choices[0].Message.Content);
@@ -105,7 +125,8 @@
         }
 
         ChatIsRequesting = false;
-        ChatIsRendering = 1;
+        if (!ErrorShow) ChatIsRendering = 1;
+        ChatDisabled = ChatIsRequesting || ChatIsRendering == 1 || ChatInput.Length == 0;
         StateHasChanged();
     }
 
@@ -115,12 +136,30 @@
         ErrorMessage = string.Empty;
 
         ChatEntries.Clear();
+
+        UserUUID = Guid.NewGuid().ToString("N");
     }
 
     [JSInvokable(nameof(UpdateChatRenderStatus))]
     public void UpdateChatRenderStatus(int ChatRenderStatus)
     {
         ChatIsRendering = ChatRenderStatus;
+        StateHasChanged();
+    }
+
+    [JSInvokable(nameof(RefreshStatus))]
+    public void RefreshStatus(string VoiceInput)
+    {
+        ChatInput = VoiceInput;
+        ChatDisabled = ChatIsRequesting || ChatIsRendering == 1 || (ChatInput).Length == 0;
+        StateHasChanged();
+    }
+
+    [JSInvokable(nameof(CheckAccessibility))]
+    public void CheckAccessibility(bool hasSpeechRecognition, bool hasSpeechSynthesis)
+    {
+        SupportSpeechRecognition = hasSpeechRecognition;
+        SupportSpeechSynthesis = hasSpeechSynthesis;
         StateHasChanged();
     }
 }

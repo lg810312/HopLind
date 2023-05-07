@@ -11,13 +11,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js" integrity="sha512-bgHRAiTjGrzHzLyKOnpFvaEpGzJet3z4tZnXGjpsCcqOnAH6VGUx9frc5bcIhKTVLEiCO6vEhNAgx5jtLUYrfA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/base16/material.min.css" integrity="sha512-FKzMeNkm8zqCguwqHyTYskFTD4L7WW5znImGuc+fYTIJGRpUWszuJLGh9Bq8smPaPzN0LtqagnRgihN53PL04A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <script language="javascript">
-    var GLOBAL = {};
-    GLOBAL.DotNetReference = null;
+    const GLOBAL = {}
+    GLOBAL.DotNetReference = null
     GLOBAL.SetDotnetReference = function (pDotNetReference) {
-        GLOBAL.DotNetReference = pDotNetReference;
-    };
+        GLOBAL.DotNetReference = pDotNetReference
+    }
 
-    document.addEventListener('DOMContentLoaded', (event) => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    const SpeechSynthesis = window.SpeechSynthesis || window.speechSynthesis
+    document.addEventListener("DOMContentLoaded", (event) => {
+        setTimeout(checkAccessibility, 2000)
+
         setTimeout(renderMarkdownTimer, 3000)
     })
 
@@ -25,7 +29,7 @@
 
     function afterRenderCompletion() {
         if (GLOBAL.DotNetReference != null)
-            GLOBAL.DotNetReference.invokeMethodAsync('UpdateChatRenderStatus', 0)
+            GLOBAL.DotNetReference.invokeMethodAsync("UpdateChatRenderStatus", 0)
 
         setTimeout(renderMarkdownTimer, 3000)
     }
@@ -42,7 +46,7 @@
 
         const currentText = markdownRaw.textContent.slice(0, currentCharIndex)
         markdownContainer.innerHTML = marked.parse(currentText + "■")
-        currentCharIndex++;
+        currentCharIndex++
 
         if (currentCharIndex <= markdownRaw.textContent.length) {
             const delayMax = 50
@@ -54,6 +58,13 @@
         else {
             const markdownParent = markdownRaw.parentElement
             markdownParent.innerHTML = markdownContainer.innerHTML.replace(/■/, "")
+
+            if (SpeechSynthesis) {
+                let speakElement = document.createElement("div")
+                markdownParent.previousElementSibling.appendChild(speakElement)
+                speakElement = markdownParent.previousElementSibling.lastElementChild
+                speakElement.outerHTML = '<div style="text-align: center; cursor: pointer" onclick="speak(this)">&#128362;</div>'
+            }
 
             hljs.highlightAll()
 
@@ -67,6 +78,125 @@
     function renderMarkdownTimer() {
         currentCharIndex = 0
         renderNextChar()
+    }
+
+    function checkAccessibility() {
+        if (GLOBAL.DotNetReference != null)
+            GLOBAL.DotNetReference.invokeMethodAsync("CheckAccessibility", SpeechRecognition != null, SpeechSynthesis != null)
+        
+        if (!SpeechSynthesis)
+            document.querySelector("#speechSynthesis").style = "display:none"
+        else {
+            voices = SpeechSynthesis.getVoices().sort(function (a, b) {
+                const aname = a.name.toUpperCase()
+                const bname = b.name.toUpperCase()
+
+                if (aname < bname)
+                    return -1
+                else if (aname == bname)
+                    return 0
+                else
+                    return +1
+            })
+
+            const voiceSelect = document.querySelector("#speechSynthesis > select")
+            voiceSelect.innerHTML = ""
+
+            let options = [];
+            for (let i = 0; i < voices.length; i++) {
+                const option = document.createElement("option")
+                option.textContent = `${voices[i].name} (${voices[i].lang})`
+
+                if (voices[i].default) {
+                    option.textContent += " -- DEFAULT"
+                    option.selected = true
+                }
+
+                option.setAttribute("data-lang", voices[i].lang)
+                option.setAttribute("data-name", voices[i].name)
+                options.push(option)
+            }
+            options.sort((a, b) => {
+                const aAttr = a.dataset.lang
+                const bAttr = b.dataset.lang
+                if (aAttr < bAttr)
+                    return -1
+                else if (aAttr > bAttr)
+                    return 1
+                else
+                    return 0
+            })
+            options.forEach((option) => voiceSelect.appendChild(option))
+        }
+    }
+
+    function startRecognition(voiceInputId) {
+        const recognition = new SpeechRecognition()
+        recognition.lang = navigator.language || navigator.userLanguage
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        recognition.onresult = function (event) {
+            const result = event.results[event.results.length - 1][0].transcript
+            document.querySelector("#" + voiceInputId).value = result
+            if (GLOBAL.DotNetReference != null)
+                GLOBAL.DotNetReference.invokeMethodAsync("RefreshStatus", result)
+        }
+        recognition.onnomatch = function (event) {
+            console.log("Cannot recognize any from voice input")
+        }
+        recognition.onerror = function (event) {
+            console.log("Error occurred in recognition: " + event.error)
+        }
+        recognition.start();
+    }
+
+    let voices = [];
+    function toggleAdvancedSettings(sender) {
+        const advancedSettings = document.querySelector("#advancedSettings")
+
+        advancedSettings.dataset.display = advancedSettings.dataset.display == 1 ? 0 : 1
+        advancedSettings.style = advancedSettings.dataset.display == 1 ? "" : "display: none"
+        sender.innerHtml = advancedSettings.dataset.display == 1 ? "&#9650;" : "&#9660;"
+    }
+
+    function speak(sender) {
+        if (!SpeechSynthesis) return
+
+        if (SpeechSynthesis.speaking) {
+            console.error("speechSynthesis.speaking")
+            return
+        }
+
+        const voiceSelect = document.querySelector("#speechSynthesis > select")
+
+        // get text content except code nodes
+        let textToSpeechNode = sender.parentElement.nextElementSibling.cloneNode(true)
+        const codeNodes = textToSpeechNode.querySelectorAll("code")
+        for (let i = 0; i < codeNodes.length; i++)
+            textToSpeechNode.removeChild(codeNodes[i].parentElement)
+
+        const textToSpeech = textToSpeechNode.textContent
+        textToSpeechNode = null
+
+        const utterThis = new SpeechSynthesisUtterance(textToSpeech)
+
+        utterThis.onend = function (event) {
+            console.log("SpeechSynthesisUtterance.onend")
+        };
+
+        utterThis.onerror = function (event) {
+            console.error("SpeechSynthesisUtterance.onerror")
+        };
+
+        const selectedOption = voiceSelect.selectedOptions[0].dataset.name
+        for (let i = 0; i < voices.length; i++)
+            if (voices[i].name === selectedOption) {
+                utterThis.voice = voices[i]
+                break
+            }
+
+        SpeechSynthesis.speak(utterThis);
     }
 </script>
 
