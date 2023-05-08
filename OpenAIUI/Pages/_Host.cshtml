@@ -7,20 +7,19 @@
 
 <component type="typeof(App)" render-mode="ServerPrerendered" />
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js" integrity="sha512-zAs8dHhwlTbfcVGRX1x0EZAH/L99NjAFzX6muwOcOJc7dbGFNaW4O7b9QOyCMRYBNjO+E0Kx6yLDsiPQhhWm7g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js" integrity="sha512-bgHRAiTjGrzHzLyKOnpFvaEpGzJet3z4tZnXGjpsCcqOnAH6VGUx9frc5bcIhKTVLEiCO6vEhNAgx5jtLUYrfA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/base16/material.min.css" integrity="sha512-FKzMeNkm8zqCguwqHyTYskFTD4L7WW5znImGuc+fYTIJGRpUWszuJLGh9Bq8smPaPzN0LtqagnRgihN53PL04A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <script language="javascript">
-    const GLOBAL = {}
-    GLOBAL.DotNetReference = null
-    GLOBAL.SetDotnetReference = function (pDotNetReference) {
+    const GLOBAL = {
+        DotNetReference: null
+    }
+
+    function SetDotnetReference(pDotNetReference) {
         GLOBAL.DotNetReference = pDotNetReference
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const SpeechSynthesis = window.SpeechSynthesis || window.speechSynthesis
+    const SpeechRecognition = window.SpeechRecognition || webkitSpeechRecognition
+    const SpeechSynthesis = speechSynthesis
     document.addEventListener("DOMContentLoaded", (event) => {
-        setTimeout(checkAccessibility, 2000)
+        setTimeout(checkAccessibility, 1000)
 
         setTimeout(renderMarkdownTimer, 3000)
     })
@@ -60,10 +59,10 @@
             markdownParent.innerHTML = markdownContainer.innerHTML.replace(/■/, "")
 
             if (SpeechSynthesis) {
-                let speakElement = document.createElement("div")
+                let speakElement = document.createElement("button")
                 markdownParent.previousElementSibling.appendChild(speakElement)
                 speakElement = markdownParent.previousElementSibling.lastElementChild
-                speakElement.outerHTML = '<div style="text-align: center; cursor: pointer" onclick="speak(this)">&#128362;</div>'
+                speakElement.outerHTML = '<button class="btn" onclick="speak(this)"><i class="fa-solid fa-volume-high"></i></button>'
             }
 
             hljs.highlightAll()
@@ -80,53 +79,73 @@
         renderNextChar()
     }
 
-    function checkAccessibility() {
-        if (GLOBAL.DotNetReference != null)
-            GLOBAL.DotNetReference.invokeMethodAsync("CheckAccessibility", SpeechRecognition != null, SpeechSynthesis != null)
-        
-        if (!SpeechSynthesis)
-            document.querySelector("#speechSynthesis").style = "display:none"
-        else {
-            voices = SpeechSynthesis.getVoices().sort(function (a, b) {
-                const aname = a.name.toUpperCase()
-                const bname = b.name.toUpperCase()
+    function populateVoiceList() {
+        if (!SpeechSynthesis) return
 
-                if (aname < bname)
-                    return -1
-                else if (aname == bname)
-                    return 0
-                else
-                    return +1
-            })
+        voices = SpeechSynthesis.getVoices().sort(function (a, b) {
+            const aname = a.name.toUpperCase()
+            const bname = b.name.toUpperCase()
 
-            const voiceSelect = document.querySelector("#speechSynthesis > select")
-            voiceSelect.innerHTML = ""
+            if (aname < bname)
+                return -1
+            else if (aname == bname)
+                return 0
+            else
+                return +1
+        })
+    }
 
-            let options = [];
-            for (let i = 0; i < voices.length; i++) {
-                const option = document.createElement("option")
-                option.textContent = `${voices[i].name} (${voices[i].lang})`
+    function renderVoiceList() {
+        if (voices.length == 0) populateVoiceList()
 
-                if (voices[i].default) {
-                    option.textContent += " -- DEFAULT"
-                    option.selected = true
-                }
+        const voiceSelect = document.querySelector("#voices")
+        voiceSelect.innerHTML = ""
 
-                option.setAttribute("data-lang", voices[i].lang)
-                option.setAttribute("data-name", voices[i].name)
-                options.push(option)
+        let options = [];
+        for (let i = 0; i < voices.length; i++) {
+            const option = document.createElement("option")
+            option.textContent = `${voices[i].name} (${voices[i].lang})`
+
+            if (voices[i].default) {
+                option.textContent += " -- DEFAULT"
+                option.selected = true
             }
-            options.sort((a, b) => {
-                const aAttr = a.dataset.lang
-                const bAttr = b.dataset.lang
-                if (aAttr < bAttr)
-                    return -1
-                else if (aAttr > bAttr)
-                    return 1
-                else
-                    return 0
-            })
-            options.forEach((option) => voiceSelect.appendChild(option))
+
+            option.setAttribute("data-lang", voices[i].lang)
+            option.setAttribute("data-name", voices[i].name)
+            options.push(option)
+        }
+        options.sort((a, b) => {
+            const aAttr = a.dataset.lang
+            const bAttr = b.dataset.lang
+            if (aAttr < bAttr)
+                return -1
+            else if (aAttr > bAttr)
+                return 1
+            else
+                return 0
+        })
+        if (!options.some((o) => o.selected)) {
+            const defaultOption = options.find((o) => o.dataset.lang == navigator.language)
+            defaultOption.selected = true
+        }
+        options.forEach((option) => voiceSelect.appendChild(option))
+    }
+
+    function checkAccessibility() {
+        console.log("checkAccessibility: SpeechRecognition=" + (SpeechRecognition != null) + ", SpeechSynthesis=" + (SpeechSynthesis != null))
+
+        if (SpeechSynthesis) {
+            populateVoiceList()
+            if (SpeechSynthesis.onvoiceschanged !== undefined)
+                SpeechSynthesis.onvoiceschanged = populateVoiceList;
+        }
+    }
+
+    function getAccessibility(Accessibility) {
+        switch (Accessibility) {
+            case "SpeechRecognition": return SpeechRecognition != null
+            case "SpeechSynthesis": return SpeechSynthesis != null
         }
     }
 
@@ -157,24 +176,26 @@
 
         advancedSettings.dataset.display = advancedSettings.dataset.display == 1 ? 0 : 1
         advancedSettings.style = advancedSettings.dataset.display == 1 ? "" : "display: none"
-        sender.innerHtml = advancedSettings.dataset.display == 1 ? "&#9650;" : "&#9660;"
+        sender.innerHTML = "<i class=\"fa-regular fa-lg fa-square-caret-" + (advancedSettings.dataset.display == 1 ? "up" : "down") + "\"></i>"
+        sender.title = advancedSettings.dataset.display == 1 ? "Hide" : "Show"
     }
 
     function speak(sender) {
         if (!SpeechSynthesis) return
 
         if (SpeechSynthesis.speaking) {
-            console.error("speechSynthesis.speaking")
+            stopSpeaking()
+
             return
         }
 
-        const voiceSelect = document.querySelector("#speechSynthesis > select")
+        const voiceSelect = document.querySelector("#voices")
 
         // get text content except code nodes
         let textToSpeechNode = sender.parentElement.nextElementSibling.cloneNode(true)
         const codeNodes = textToSpeechNode.querySelectorAll("code")
         for (let i = 0; i < codeNodes.length; i++)
-            textToSpeechNode.removeChild(codeNodes[i].parentElement)
+            codeNodes[i].parentElement.removeChild(codeNodes[i])
 
         const textToSpeech = textToSpeechNode.textContent
         textToSpeechNode = null
@@ -183,6 +204,7 @@
 
         utterThis.onend = function (event) {
             console.log("SpeechSynthesisUtterance.onend")
+            document.querySelector(".fa-fade").className = document.querySelector(".fa-fade").className.replace(/\sfa\-fade/, "")
         };
 
         utterThis.onerror = function (event) {
@@ -196,7 +218,18 @@
                 break
             }
 
+        utterThis.rate = document.querySelector("#rate").value
         SpeechSynthesis.speak(utterThis);
+
+        sender.querySelector("i").className = sender.querySelector("i").className + " fa-fade"
+    }
+
+    function stopSpeaking() {
+        if (SpeechSynthesis.speaking) {
+            SpeechSynthesis.cancel()
+
+            document.querySelector(".fa-fade").className = document.querySelector(".fa-fade").className.replace(/\sfa\-fade/, "")
+        }
     }
 </script>
 

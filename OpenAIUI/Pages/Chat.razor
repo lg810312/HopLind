@@ -13,12 +13,18 @@
 
 <h1>Chat</h1>
 
-<div>
+<div style="margin-bottom: 1rem">
     Advanced Settings
-    <div style="cursor: pointer; display: inline-block" onclick="toggleAdvancedSettings(this)">&#11206;</div>
+    <button class="btn" title="Show" onclick="toggleAdvancedSettings(this)">
+        <i class="fa-regular fa-square-caret-down"></i>
+    </button>
     <div id="advancedSettings" data-display="0" style="display: none">
-        <div id="speechSynthesis">
-            <select></select>
+        <div id="speechSynthesis" style="@(SupportSpeechSynthesis ? string.Empty : "display: none")">
+            <label for="voices">Speaking voices:</label><select id="voices"></select>
+            <div>
+                <label for="rate">Speaking rate:</label><input type="range" min="0.5" max="2" value="1" step="0.1" id="rate" onchange="document.querySelector('#rate-value').textContent = document.querySelector('#rate').value" />
+                <div id="rate-value" style="display: inline">1</div>
+            </div>
         </div>
     </div>
 </div>
@@ -45,39 +51,57 @@
     <EditForm Model="ChatInput" style="display: flex">
         <InputTextArea style="flex: 1 1 80%;" id="ChatInput" @bind-Value="ChatInput" @oninput="SetButton" />
         <div style="width: 20%; margin-left: 0.5rem; flex: 1 1 20%">
-            <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Send" disabled="@ChatDisabled" @onclick="async () => await AddChatEntry()">&#9992;</button>
-            <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Voice Input" hidden="@(!SupportSpeechRecognition)" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" onclick="startRecognition('ChatInput')">&#127908;</button>
-            <button class="btn btn-outline-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Go to Top" onclick="document.querySelector('#markdown-is-rendering').parentNode.querySelector('ul').scrollTop = 0">&#128285;</button>
-            <button class="btn btn-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" @onclick="() => ClearChatEntries()">&#128465;</button>
+            <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Send" disabled="@ChatDisabled" @onclick="async () => await AddChatEntry()">
+                <i class="fa-solid fa-lg fa-paper-plane"></i>
+            </button>
+            <button class="btn btn-primary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Voice Input" hidden="@(!SupportSpeechRecognition)" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" onclick="startRecognition('ChatInput')">
+                <i class="fa-solid fa-lg fa-microphone-lines"></i>
+            </button>
+            <button class="btn btn-outline-secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Go to Top" onclick="document.querySelector('#markdown-is-rendering').parentNode.querySelector('ul').scrollTop = 0">
+                <i class="fa-regular fa-lg fa-circle-up"></i>
+            </button>
+            <button class="btn btn-outline-danger" style="margin-right: 0.5rem; margin-bottom: 0.5rem;" title="Clear conversation" disabled="@(ChatIsRequesting || ChatIsRendering == 1)" @onclick="() => ClearChatEntries()">
+                <i class="fa-regular fa-lg fa-trash-can"></i>
+            </button>
         </div>
     </EditForm>
 </div>
 
 @code {
-    private string UserUUID = Guid.NewGuid().ToString("N");
+    private string UserUUID { get; set; } = Guid.NewGuid().ToString("N");
 
     private bool SupportSpeechRecognition { get; set; }
     private bool SupportSpeechSynthesis { get; set; }
 
-    private bool ErrorShow;
-    private string ErrorMessage = string.Empty;
+    private bool ErrorShow { get; set; }
+    private string ErrorMessage { get; set; } = string.Empty;
 
-    private bool ChatDisabled = true;
-    private bool ChatIsRequesting;
-    private int ChatIsRendering = 0;
+    private bool ChatDisabled { get; set; } = true;
+    private bool ChatIsRequesting { get; set; }
+    private int ChatIsRendering { get; set; }
 
-    private string ChatInput = string.Empty;
+    private string ChatInput { get; set; } = string.Empty;
 
-    private List<(string Role, string Content)> ChatEntries = new();
+    private List<(string Role, string Content)> ChatEntries { get; } = new();
 
     private const int ChatContextLength = 10;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ChatReference = DotNetObjectReference.Create(this);
+        _ = JSRuntime.InvokeVoidAsync("SetDotnetReference", ChatReference);
+
+        await base.OnInitializedAsync();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            var ChatReference = DotNetObjectReference.Create(this);
-            _ = JSRuntime.InvokeVoidAsync("GLOBAL.SetDotnetReference", ChatReference);
+            SupportSpeechRecognition = await JSRuntime.InvokeAsync<bool>("getAccessibility", "SpeechRecognition");
+            SupportSpeechSynthesis = await JSRuntime.InvokeAsync<bool>("getAccessibility", "SpeechSynthesis");
+            _ = JSRuntime.InvokeVoidAsync("renderVoiceList");
+            StateHasChanged();
         }
         await base.OnAfterRenderAsync(firstRender);
     }
@@ -98,6 +122,7 @@
         string Input = new string(ChatInput);
         ChatInput = string.Empty;
 
+        ChatDisabled = ChatIsRequesting || ChatIsRendering == 1 || ChatInput.Length == 0;
         StateHasChanged();
 
         var ChatEntry = (Role: ChatGPTConstant.ChatGPTRoleUser, Content: Input);
@@ -108,7 +133,7 @@
                 {
                     Model = OpenAIConfig.Value.APIType is APIType.Azure ? "gpt-35-turbo" : "gpt-3.5-turbo",
                     Messages = ChatEntries.Skip(ChatEntries.Count <= ChatContextLength ? 0 : ChatEntries.Count - ChatContextLength)
-                    .Select(c => new ChatGPTMessage(c.Role, c.Content)).ToArray()
+                        .Select(c => new ChatGPTMessage(c.Role, c.Content)).ToArray()
                 });
 
             ChatEntry = (Completion.Choices[0].Message.Role, Completion.Choices[0].Message.Content);
@@ -132,6 +157,8 @@
 
     private void ClearChatEntries()
     {
+        _ = JSRuntime.InvokeVoidAsync("stopSpeaking");
+
         ErrorShow = false;
         ErrorMessage = string.Empty;
 
@@ -152,14 +179,6 @@
     {
         ChatInput = VoiceInput;
         ChatDisabled = ChatIsRequesting || ChatIsRendering == 1 || (ChatInput).Length == 0;
-        StateHasChanged();
-    }
-
-    [JSInvokable(nameof(CheckAccessibility))]
-    public void CheckAccessibility(bool hasSpeechRecognition, bool hasSpeechSynthesis)
-    {
-        SupportSpeechRecognition = hasSpeechRecognition;
-        SupportSpeechSynthesis = hasSpeechSynthesis;
         StateHasChanged();
     }
 }
