@@ -8,13 +8,13 @@ public abstract class GPTRequestBase
 
     public int MaxTokens { get; set; } = 800;
 
-    public decimal Temperature { get; set; } = 0.5m;
+    public decimal Temperature { get; set; } = 1;
 
     public decimal FrequencyPenalty { get; set; }
 
     public decimal PresencePenalty { get; set; }
 
-    public decimal TopP { get; set; } = 0.95m;
+    public decimal TopP { get; set; } = 1;
 
     public string Stop { get; set; }
 }

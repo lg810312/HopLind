@@ -26,6 +26,42 @@
                 <div id="rate-value" style="display: inline">1</div>
             </div>
         </div>
+        <div style="border: 1px solid #ddd"></div>
+        <div id="GPTParameters">
+            <div>
+                <label for="ChatContextLength">Include last messages <i class="fa-solid fa-circle-info" title="both users' inquiries and system responses"></i></label>
+                <input type="range" min="2" max="10" step="2" id="ChatContextLength" @bind-value="@ChatContextLength" />
+                <div id="ChatContentLength-value" style="display: inline">@ChatContextLength</div>
+            </div>
+
+            <div>
+                <label for="MaxTokens">
+                    Max Tokens <i class="fa-solid fa-circle-info" title="The maximum number of tokens to generate in the chat completion. The total length of input tokens and generated tokens is limited by the model's context length."></i>
+                </label>
+                <input type="range" min="1" max="4000" step="1" id="MaxTokens" @bind-value="@MaxTokens" />
+                <div id="MaxTokens-value" style="display: inline">@MaxTokens</div>
+            </div>
+
+            <div>
+                <label for="Temperature">
+                    Temperature <i class="fa-solid fa-circle-info" title="Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. Generally recommend altering this or top_p but not both."></i>
+                </label>
+                <input type="range" min="0" max="2" step="0.01" id="Temperature" @bind-value="@Temperature" />
+                <div id="Temperature-value" style="display: inline">@Temperature</div>
+            </div>
+
+            <div>
+                <label for="TopP">
+                    Top P <i class="fa-solid fa-circle-info" title="An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered. Generally recommend altering this or temperature but not both."></i>
+                </label>
+                <input type="range" min="0" max="1" step="0.01" id="TopP" @bind-value="@TopP" />
+                <div id="TopP-value" style="display: inline">@TopP</div>
+            </div>
+        </div>
+        <div>
+            <label for="TechDetails">Display technical details</label>
+            <input type="checkbox" id="TechDetails" @bind-value="@DisplayTechDetails" />
+        </div>
     </div>
 </div>
 
@@ -48,6 +84,7 @@
 
 <div style="width: 100%">
     <div style="color: red; display: @(ErrorShow ? "block": "none")">@ErrorMessage</div>
+    <div style="display: @(DisplayTechDetails ? "block" : "none")">@TechDetails</div>
     <EditForm Model="ChatInput" style="display: flex">
         <InputTextArea style="flex: 1 1 80%;" id="ChatInput" @bind-Value="ChatInput" @oninput="SetButton" />
         <div style="width: 20%; margin-left: 0.5rem; flex: 1 1 20%">
@@ -84,7 +121,14 @@
 
     private List<(string Role, string Content)> ChatEntries { get; } = new();
 
-    private const int ChatContextLength = 10;
+    // GPT parameters
+    private int ChatContextLength { get; set; } = 10;
+    private int MaxTokens { get; set; } = 800;
+    private decimal Temperature { get; set; } = 1;
+    private decimal TopP { get; set; } = 1;
+
+    private bool DisplayTechDetails { get; set; }
+    private string TechDetails{ get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -133,11 +177,16 @@
                 {
                     Model = OpenAIConfig.Value.APIType is APIType.Azure ? "gpt-35-turbo" : "gpt-3.5-turbo",
                     Messages = ChatEntries.Skip(ChatEntries.Count <= ChatContextLength ? 0 : ChatEntries.Count - ChatContextLength)
-                        .Select(c => new ChatGPTMessage(c.Role, c.Content)).ToArray()
+                        .Select(c => new ChatGPTMessage(c.Role, c.Content)).ToArray(),
+                    MaxTokens = MaxTokens,
+                    Temperature = Temperature,
+                    TopP = TopP,
                 });
 
             ChatEntry = (Completion.Choices[0].Message.Role, Completion.Choices[0].Message.Content);
             ChatEntries.Add(ChatEntry);
+
+            TechDetails = $"{nameof(ChatGPTResponse.Usage.PromptTokens)}: {Completion.Usage.PromptTokens}, {nameof(ChatGPTResponse.Usage.CompletionTokens)}: {Completion.Usage.CompletionTokens}";
         }
         catch (Exception ex)
         {
