@@ -26,7 +26,7 @@
                 <div id="rate-value" style="display: inline">1</div>
             </div>
         </div>
-        <div style="border: 1px solid #ddd"></div>
+        <div style="border: 1px solid #ddd; margin: 1rem 0"></div>
         <div id="GPTParameters">
             <div>
                 <label for="ChatContextLength">Include last messages <i class="fa-solid fa-circle-info" title="both users' inquiries and system responses"></i></label>
@@ -62,17 +62,26 @@
             <label for="TechDetails">Display technical details</label>
             <input type="checkbox" id="TechDetails" @bind-value="@DisplayTechDetails" />
         </div>
+        <div style="border: 1px solid #ddd; margin: 1rem 0"></div>
+        <div>
+            <label for="SystemMessage">
+                System message (Cannot be modified during a conversation and can be reset when conversation is cleared)
+                <i class="fa-solid fa-circle-info" title="The system message is included at the beginning of the prompt and is used to prime the model with context, instructions, or other information relevant to your use case. You can use the system message to describe the assistant's personality, define what the model should and shouldn't answer, and define the format of model responses."></i>
+            </label>
+            <br />
+            <textarea id="SystemMessage" maxlength="100" style="width: 80%" disabled="@(ChatEntries.Count > 0)" @bind="@SystemMessage" />
+        </div>
     </div>
 </div>
 
 <ul style="width: 100%; max-height: 70vh; padding-left: 0; overflow-y: scroll">
-    @foreach (var ChatEntry in ChatEntries)
+    @foreach (var ChatEntry in ChatEntries.Where(c => c.Role != ChatGPTRole.System))
     {
         <li style="width: 100%; margin-bottom: 0.5rem; display: flex">
-            <div class="chat-role chat-@(ChatEntry.Role)">
-                <img src="@($"https://api.multiavatar.com/{(ChatEntry.Role == "user" ? string.Empty : "ChatGPT")}{UserUUID}.png")" width="48" />
+            <div class="chat-role chat-@(ChatEntry.Role.ToString())">
+                <img src="@($"https://api.multiavatar.com/{(ChatEntry.Role == ChatGPTRole.User ? string.Empty : "ChatGPT")}{UserUUID}.png")" width="48" />
             </div>
-            <div class="chat-content chat-@(ChatEntry.Role)">
+            <div class="chat-content chat-@(ChatEntry.Role.ToString())">
                 <div id="@(Guid.NewGuid().ToString("N"))" class="markdown-raw">@(ChatEntry.Content)</div>
                 <div class="markdown-container"></div>
             </div>
@@ -119,7 +128,7 @@
 
     private string ChatInput { get; set; } = string.Empty;
 
-    private List<(string Role, string Content)> ChatEntries { get; } = new();
+    private List<(ChatGPTRole Role, string Content)> ChatEntries { get; } = new();
 
     // GPT parameters
     private int ChatContextLength { get; set; } = 10;
@@ -128,7 +137,9 @@
     private decimal TopP { get; set; } = 1;
 
     private bool DisplayTechDetails { get; set; }
-    private string TechDetails{ get; set; }
+    private string TechDetails { get; set; }
+
+    private string SystemMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -160,6 +171,9 @@
     {
         if (string.IsNullOrWhiteSpace(ChatInput)) return;
 
+        if (!ChatEntries.Any() && !string.IsNullOrWhiteSpace(SystemMessage))
+            ChatEntries.Add((ChatGPTRole.System, SystemMessage));
+
         ErrorShow = false;
         ChatIsRequesting = true;
 
@@ -169,7 +183,7 @@
         ChatDisabled = ChatIsRequesting || ChatIsRendering == 1 || ChatInput.Length == 0;
         StateHasChanged();
 
-        var ChatEntry = (Role: ChatGPTConstant.ChatGPTRoleUser, Content: Input);
+        var ChatEntry = (Role: ChatGPTRole.User, Content: Input);
         ChatEntries.Add(ChatEntry);
         try
         {
@@ -186,11 +200,14 @@
             ChatEntry = (Completion.Choices[0].Message.Role, Completion.Choices[0].Message.Content);
             ChatEntries.Add(ChatEntry);
 
-            TechDetails = $"{nameof(ChatGPTResponse.Usage.PromptTokens)}: {Completion.Usage.PromptTokens}, {nameof(ChatGPTResponse.Usage.CompletionTokens)}: {Completion.Usage.CompletionTokens}";
+            TechDetails = $"{nameof(Choice.FinishReason)}: {Completion.Choices[0].FinishReason}, {nameof(ChatGPTResponse.Usage.PromptTokens)}: {Completion.Usage.PromptTokens}, {nameof(ChatGPTResponse.Usage.CompletionTokens)}: {Completion.Usage.CompletionTokens}";
         }
         catch (Exception ex)
         {
             ChatEntries.RemoveAt(ChatEntries.Count - 1);
+
+            if (ChatEntries.Count == 1 && !string.IsNullOrWhiteSpace(SystemMessage))
+                ChatEntries.RemoveAt(0);
 
             ChatInput = Input;
 

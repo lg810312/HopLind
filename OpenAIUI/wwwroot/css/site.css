@@ -73,12 +73,12 @@ a, .btn-link {
     padding: 0.5rem;
 }
 
-.chat-user {
+.chat-User {
     background-color: #f3f3f3;
     border: 1px solid #ddd;
 }
 
-.chat-assistant {
+.chat-Assistant {
     background-color: #e0e0e0;
     border: 1px solid #ccc;
 }

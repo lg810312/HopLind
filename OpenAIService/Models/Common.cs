@@ -2,14 +2,14 @@ using System.ComponentModel;
 
 namespace HopLind.OpenAIService.Models;
 
-public class ChatGPTConstant
+public enum ChatGPTRole
 {
-    public const string ChatGPTRoleSystem = "system";
-    public const string ChatGPTRoleUser = "user";
-    public const string ChatGPTRoleAssistant = "assistant";
+    System,
+    User,
+    Assistant,
 }
 
-public record ChatGPTMessage(string Role, string Content);
+public record ChatGPTMessage(ChatGPTRole Role, string Content);
 
 public enum ChoiceFinishReason
 {
@@ -17,43 +17,6 @@ public enum ChoiceFinishReason
     length,
     content_filter,
 }
-//public readonly struct ChoiceFinishReason : IEquatable<ChoiceFinishReason>
-//{
-//    private readonly string _value;
-
-//    public ChoiceFinishReason(string value)
-//    {
-//        _value = value ?? throw new ArgumentNullException(nameof(value));
-//    }
-
-//    private const string StopValue = "stop";
-//    private const string LengthValue = "length";
-//    private const string ContentFilterValue = "content_filter";
-
-//    public static ChoiceFinishReason Stop { get; } = new ChoiceFinishReason(StopValue);
-//    public static ChoiceFinishReason Length { get; } = new ChoiceFinishReason(LengthValue);
-//    public static ChoiceFinishReason ContentFilter { get; } = new ChoiceFinishReason(ContentFilterValue);
-
-//    public static bool operator ==(ChoiceFinishReason left, ChoiceFinishReason right) => left.Equals(right);
-//    public static bool operator !=(ChoiceFinishReason left, ChoiceFinishReason right) => !left.Equals(right);
-//    public static implicit operator ChoiceFinishReason(string value) => new(value);
-
-//    [EditorBrowsable(EditorBrowsableState.Never)]
-//    public override bool Equals(object obj) => obj is ChoiceFinishReason other && Equals(other);
-//    public bool Equals(ChoiceFinishReason other) => string.Equals(_value, other._value, StringComparison.InvariantCultureIgnoreCase);
-
-//    [EditorBrowsable(EditorBrowsableState.Never)]
-//    public override int GetHashCode() => _value?.GetHashCode() ?? 0;
-
-//    public override string ToString() => _value;
-
-//    public static class Values
-//    {
-//        public const string Stop = StopValue;
-//        public const string Length = LengthValue;
-//        public const string ContentFilter = ContentFilterValue;
-//    }
-//}
 
 public readonly struct Speech2TextResponseFormat : IEquatable<Speech2TextResponseFormat>
 {
